@@ -16,7 +16,7 @@ class ChatMessage {
 }
 
 class ChatbotPage extends StatefulWidget {
-  const ChatbotPage({Key? key}) : super(key: key);
+  const ChatbotPage({super.key});
 
   @override
   State<ChatbotPage> createState() => _ChatbotPageState();
@@ -28,23 +28,25 @@ class _ChatbotPageState extends State<ChatbotPage> {
 
   final String backendUrl = "http://127.0.0.1:8000/chat";
 
-  bool awaitingSummaryConfirmation = false;
-
   /// ---------------- SEND MESSAGE ----------------
   Future<void> sendMessage(String text) async {
-    if (text.trim().isEmpty) return;
+    final userText = text.trim();
+    if (userText.isEmpty) return;
 
     setState(() {
-      _messages.add(ChatMessage(text, true));
+      _messages.add(ChatMessage(userText, true));
     });
 
     _controller.clear();
+
+    // ✅ Handle navigation ONLY from user input
+    handleIntentFromUser(userText);
 
     try {
       final response = await http.post(
         Uri.parse(backendUrl),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"message": text}),
+        body: jsonEncode({"message": userText}),
       );
 
       if (response.statusCode == 200) {
@@ -54,91 +56,61 @@ class _ChatbotPageState extends State<ChatbotPage> {
         setState(() {
           _messages.add(ChatMessage(reply, false));
         });
-
-        handleIntent(reply);
       } else {
         showBotError();
       }
-    } catch (e) {
+    } catch (_) {
       showBotError();
     }
   }
 
-  /// ---------------- HANDLE INTENTS ----------------
-  void handleIntent(String reply) {
-    final lower = reply.toLowerCase();
+  /// ---------------- INTENT FROM USER (FIX) ----------------
+  void handleIntentFromUser(String userText) {
+    final lower = userText.toLowerCase();
 
-    if (lower.contains("notices")) {
-      awaitingSummaryConfirmation = true;
+    if (lower.contains("notice")) {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => NoticesPage()),
       );
-    } else if (lower.contains("events")) {
+    } else if (lower.contains("event")) {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => EventsPage()),
       );
-    } else if (lower.contains("academics")) {
+    } else if (lower.contains("academic")) {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => AcademicsPage()),
       );
-    } else if (lower.contains("timetable")) {
+    } else if (lower.contains("timetable") ||
+        lower.contains("schedule")) {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => TimetablePage()),
       );
-    } else if (
-        awaitingSummaryConfirmation &&
-        (lower.contains("yes") || lower.contains("summarize"))) {
-      awaitingSummaryConfirmation = false;
-      sendMessage("summarize latest notices");
     }
   }
 
   void showBotError() {
     setState(() {
       _messages.add(
-        ChatMessage("⚠️ Unable to connect to server.", false),
+        ChatMessage("⚠️ Unable to connect to campus server.", false),
       );
     });
-  }
-
-  /// ---------------- QUICK REPLIES ----------------
-  Widget quickReplies() {
-    return Wrap(
-      spacing: 8,
-      children: [
-        quickButton("Notices"),
-        quickButton("Events"),
-        quickButton("Academics"),
-        quickButton("Timetable"),
-      ],
-    );
-  }
-
-  Widget quickButton(String label) {
-    return ElevatedButton(
-      onPressed: () => sendMessage("show $label"),
-      child: Text(label),
-    );
   }
 
   /// ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // 🔹 No aggressive blue navigation behavior
       appBar: AppBar(
         title: const Text("CampusONE Assistant"),
-        backgroundColor: Colors.blue,
+        elevation: 0,
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: quickReplies(),
-          ),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(12),
@@ -146,21 +118,23 @@ class _ChatbotPageState extends State<ChatbotPage> {
               itemBuilder: (context, index) {
                 final msg = _messages[index];
                 return Align(
-                  alignment:
-                      msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
+                  alignment: msg.isUser
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
                   child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    margin: const EdgeInsets.symmetric(vertical: 6),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: msg.isUser
-                          ? Colors.blueAccent
+                          ? const Color(0xFF1A73E8)
                           : Colors.grey.shade300,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       msg.text,
                       style: TextStyle(
-                        color: msg.isUser ? Colors.white : Colors.black,
+                        color:
+                            msg.isUser ? Colors.white : Colors.black,
                       ),
                     ),
                   ),
@@ -186,8 +160,9 @@ class _ChatbotPageState extends State<ChatbotPage> {
                 const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.send),
-                  onPressed: () => sendMessage(_controller.text),
-                )
+                  onPressed: () =>
+                      sendMessage(_controller.text),
+                ),
               ],
             ),
           ),
